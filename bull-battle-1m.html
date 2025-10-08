@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Bull vs Bear — 1 Minute Flow</title>
+<meta name="description" content="Bull and Bear battlefield driven by 1-minute trade flow. Bull sprite type reflects trade size." />
+<style>
+  :root{
+    --bg: #0b0d11;
+    --floor:#0e1218;
+    --text:#eaf2ff;
+    --muted:#9fb0c6;
+    --bull:#2fd58e;
+    --bear:#ff5a79;
+    --price:#ffe081;
+    --edge:#1b2432;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;font-family:ui-sans-serif,system-ui,-apple-system,Inter,Segoe UI,Roboto,Arial,sans-serif;background:radial-gradient(1200px 800px at 50% -10%, rgba(53,208,127,.08), transparent 30%),radial-gradient(900px 600px at 50% 110%, rgba(255,90,121,.06), transparent 35%),var(--bg);color:var(--text);overflow:hidden}
+  header{position:fixed;inset:0 0 auto 0;height:58px;display:flex;align-items:center;gap:10px;padding:0 16px;background:color-mix(in oklab, var(--bg), #141a23 35%);border-bottom:1px solid var(--edge);z-index:20}
+  header .dot{width:10px;height:10px;border-radius:50%;background:linear-gradient(135deg,var(--bull),#8cf5b9)}
+  header h1{font-size:16px;margin:0 8px 0 6px;letter-spacing:.3px;color:var(--muted)}
+  .row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-left:auto}
+  label{font-size:13px;color:var(--muted)}
+  input{background:#121824;color:var(--text);border:1px solid var(--edge);padding:8px 10px;border-radius:10px;outline:0}
+  .pill{border:1px solid var(--edge);padding:8px 10px;border-radius:999px;font-size:12px;color:var(--muted)}
+  .stat{font-variant-numeric:tabular-nums}
+  .good{color:var(--bull)} .bad{color:var(--bear)}
+
+  .stage{position:absolute;inset:58px 0 0 0;display:grid;place-items:center}
+  .arena{position:relative;width:min(1100px,96vw);height:min(720px,calc(100vh - 90px));border:1px solid var(--edge);border-radius:18px;overflow:hidden;background:radial-gradient(850px 350px at 50% 120%, rgba(255,255,255,.04), transparent 50%),linear-gradient(to bottom, rgba(255,255,255,.02), rgba(0,0,0,.08)),var(--floor)}
+  .ground{position:absolute;left:0;right:0;bottom:0;height:22%;background:linear-gradient(0deg, rgba(0,0,0,.35), transparent),repeating-linear-gradient(90deg, rgba(255,255,255,.03) 0 2px, transparent 2px 30px);border-top:1px solid var(--edge)}
+
+  .price-wrap{position:absolute;left:50%;top:14%;transform:translateX(-50%);display:flex;align-items:center;justify-content:center;width:min(70vw,520px);height:min(16vh,160px);z-index:3}
+  .price{font-weight:900;font-size:clamp(34px,6.5vw,76px);letter-spacing:.5px;color:var(--price);text-shadow:0 0 32px rgba(255,224,129,.25);padding:.15em .35em;border-radius:16px;background:color-mix(in oklab,#241700,transparent 70%);border:1px solid color-mix(in oklab,#8b6b1d,transparent 60%)}
+  .ticker{position:absolute;top:-30px;font-weight:700;font-size:14px;color:var(--muted)}
+
+  .center-line{position:absolute;top:0;bottom:22%;width:10px;left:50%;transform:translateX(-50%);background:linear-gradient(180deg,#2a3a2f,#173323);border-left:1px solid rgba(255,255,255,.04);border-right:1px solid rgba(0,0,0,.5);transition:transform .18s ease-out;z-index:2}
+
+  /* Volume bars */
+  .bar{position:absolute;top:12%;bottom:24%;width:10px;opacity:.8}
+  .bar.bull{left:12px;background:linear-gradient(to top,var(--bull),transparent)}
+  .bar.bear{right:12px;background:linear-gradient(to top,var(--bear),transparent)}
+
+  /* Sprites */
+  .sprite{position:absolute;bottom:22%;will-change:transform;z-index:2;pointer-events:none;filter:drop-shadow(0 10px 18px rgba(0,0,0,.35))}
+  .sprite svg{width:100%;height:auto}
+  @keyframes march {0%{transform:translateY(0)}50%{transform:translateY(-4px)}100%{transform:translateY(0)}}
+  .sprite svg{animation:march 1.2s ease-in-out infinite}
+  .bear-sprite{right:-160px}
+  .bull-sprite{left:-160px}
+  .impact{position:absolute;width:10px;height:10px;border-radius:50%;pointer-events:none;mix-blend-mode:screen;z-index:4}
+
+  .hud{position:absolute;left:0;right:0;bottom:0;display:flex;justify-content:space-between;gap:10px;padding:12px 14px;border-top:1px solid var(--edge);background:rgba(10,14,20,.6);backdrop-filter:blur(6px);font-size:12px;color:var(--muted)}
+  .meter{height:8px;background:#0f1622;border:1px solid var(--edge);border-radius:999px;overflow:hidden}
+  .meter>span{display:block;height:100%}
+</style>
+</head>
+<body>
+  <header>
+    <span class="dot"></span>
+    <h1>Bull vs Bear — 1 Minute Flow</h1>
+    <div class="row">
+      <label for="symbol">Symbol</label>
+      <input id="symbol" value="ETHUSDT" spellcheck="false" />
+      <span class="pill">Window: <strong>1m</strong></span>
+      <span class="pill">Exchange: <strong class="stat">Binance</strong></span>
+      <span class="pill">WS: <span id="wsState" class="stat">disconnected</span></span>
+    </div>
+  </header>
+
+  <div class="stage">
+    <div class="arena" id="arena">
+      <div class="bar bull" id="bullBar" style="height:40%"></div>
+      <div class="bar bear" id="bearBar" style="height:30%"></div>
+
+      <div class="center-line" id="centerLine"></div>
+
+      <div class="price-wrap">
+        <div class="ticker" id="pairLabel">ETH / USDT</div>
+        <div class="price" id="price">—</div>
+      </div>
+
+      <div class="ground"></div>
+
+      <div class="hud">
+        <div>Last trade: <span id="lastSide" class="stat">—</span> • <span id="lastQty" class="stat">—</span> @ <span id="lastPrice" class="stat">—</span></div>
+        <div style="display:flex;align-items:center;gap:8px;min-width:35%">
+          <span>Imbalance (count, 1m)</span>
+          <div class="meter" style="flex:1"><span id="imbMeter" style="width:50%;background:linear-gradient(90deg,var(--bear),var(--bull));transform:translateX(0%)"></span></div>
+        </div>
+        <div>1m Vol — <span class="good stat" id="bullVol">0</span> / <span class="bad stat" id="bearVol">0</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Inline SVGs for three bull variants and a bear template -->
+  <template id="svg-bull-military">
+    <svg viewBox="0 0 320 240" xmlns="http://www.w3.org/2000/svg" aria-label="Military Bull">
+      <defs><linearGradient id="mb" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#6fb36d"/><stop offset="1" stop-color="#345b33"/></linearGradient></defs>
+      <g>
+        <ellipse cx="160" cy="210" rx="80" ry="18" fill="rgba(0,0,0,.35)"/>
+        <path d="M70,70 h180 a20,20 0 0 1 20,20 v6 h-220 v-6 a20,20 0 0 1 20-20z" fill="#6d855f" stroke="#2e3c2a" stroke-width="3"/>
+        <ellipse cx="160" cy="130" rx="95" ry="70" fill="url(#mb)" stroke="#2e3c2a" stroke-width="3"/>
+        <rect x="95" y="165" width="130" height="44" rx="22" fill="url(#mb)" stroke="#2e3c2a" stroke-width="3"/>
+        <circle cx="130" cy="110" r="9" fill="#1d2b1d"/><circle cx="190" cy="110" r="9" fill="#1d2b1d"/>
+        <ellipse cx="160" cy="140" rx="50" ry="26" fill="#2b3b2a" stroke="#1f2a1e" stroke-width="3"/>
+        <path d="M120,96 q40,-16 80,0" stroke="#233522" stroke-width="8" fill="none" stroke-linecap="round"/>
+      </g>
+    </svg>
+  </template>
+
+  <template id="svg-bull-roman">
+    <svg viewBox="0 0 320 240" xmlns="http://www.w3.org/2000/svg" aria-label="Roman Bull">
+      <defs><linearGradient id="rb" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#ffd167"/><stop offset="1" stop-color="#b78020"/></linearGradient></defs>
+      <g>
+        <ellipse cx="160" cy="210" rx="80" ry="18" fill="rgba(0,0,0,.35)"/>
+        <path d="M30,70 C60,20 120,20 130,70" fill="none" stroke="#e7e0c1" stroke-width="12" stroke-linecap="round"/>
+        <path d="M290,70 C260,20 200,20 190,70" fill="none" stroke="#e7e0c1" stroke-width="12" stroke-linecap="round"/>
+        <ellipse cx="160" cy="120" rx="90" ry="70" fill="url(#rb)" stroke="#9a6b18" stroke-width="3"/>
+        <rect x="95" y="160" width="130" height="44" rx="22" fill="url(#rb)" stroke="#9a6b18" stroke-width="3"/>
+        <path d="M75,75 l20,0 10,20 -30,0 z" fill="#c83e32"/><path d="M245,75 l-20,0 -10,20 30,0 z" fill="#c83e32"/>
+        <ellipse cx="135" cy="110" rx="10" ry="8" fill="#5a3c0e"/><ellipse cx="185" cy="110" rx="10" ry="8" fill="#5a3c0e"/>
+        <path d="M120,100 q40,-16 80,0" stroke="#7a4b12" stroke-width="8" fill="none" stroke-linecap="round"/>
+      </g>
+    </svg>
+  </template>
+
+  <template id="svg-bull-space">
+    <svg viewBox="0 0 320 240" xmlns="http://www.w3.org/2000/svg" aria-label="Space Bull">
+      <defs><linearGradient id="sb" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#d6d7e6"/><stop offset="1" stop-color="#6d6e8e"/></linearGradient></defs>
+      <g>
+        <ellipse cx="160" cy="210" rx="80" ry="18" fill="rgba(0,0,0,.35)"/>
+        <circle cx="160" cy="120" r="92" fill="url(#sb)" stroke="#3b3c5a" stroke-width="4"/>
+        <rect x="115" y="160" width="90" height="36" rx="10" fill="#222a44" />
+        <rect x="140" y="168" width="40" height="8" rx="4" fill="#38e27d"/>
+        <path d="M105,80 h110 a20,20 0 0 1 20,20 v22 a20,20 0 0 1 -20,20 h-110 a20,20 0 0 1 -20,-20 v-22 a20,20 0 0 1 20,-20 z" fill="rgba(20,26,56,.4)" stroke="#3b3c5a" stroke-width="4"/>
+        <circle cx="130" cy="108" r="14" fill="#0c122e"/><circle cx="190" cy="108" r="14" fill="#0c122e"/>
+      </g>
+    </svg>
+  </template>
+
+  <template id="svg-bear">
+    <svg viewBox="0 0 320 240" xmlns="http://www.w3.org/2000/svg" aria-label="Bear">
+      <defs><linearGradient id="gb" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#ff8fa1"/><stop offset="1" stop-color="#8d1f33"/></linearGradient></defs>
+      <g>
+        <ellipse cx="160" cy="210" rx="80" ry="18" fill="rgba(0,0,0,.35)"/>
+        <circle cx="120" cy="70" r="22" fill="url(#gb)" stroke="#6f182a" stroke-width="3"/>
+        <circle cx="200" cy="70" r="22" fill="url(#gb)" stroke="#6f182a" stroke-width="3"/>
+        <ellipse cx="160" cy="130" rx="95" ry="70" fill="url(#gb)" stroke="#6f182a" stroke-width="3"/>
+        <rect x="95" y="165" width="130" height="44" rx="22" fill="url(#gb)" stroke="#6f182a" stroke-width="3"/>
+        <ellipse cx="160" cy="138" rx="46" ry="26" fill="#5b0e1f" stroke="#6e1628" stroke-width="3"/>
+        <circle cx="146" cy="138" r="5" fill="#2c050d"/>
+        <circle cx="174" cy="138" r="5" fill="#2c050d"/>
+        <ellipse cx="140" cy="112" rx="10" ry="8" fill="#2c050d"/>
+        <ellipse cx="180" cy="112" rx="10" ry="8" fill="#2c050d"/>
+        <path d="M135,130 q25,-12 50,0" stroke="#2c050d" stroke-width="8" fill="none" stroke-linecap="round"/>
+      </g>
+    </svg>
+  </template>
+
+<script>
+(() => {
+  const WINDOW_MS = 60_000; // 1 minute
+  const metrics = { small: 5_000, medium: 50_000 }; // USDT thresholds
+  const SPEED = 1.2; // seconds to reach center
+
+  const wsState = document.getElementById('wsState');
+  const pairLabel = document.getElementById('pairLabel');
+  const priceEl = document.getElementById('price');
+  const lastSide = document.getElementById('lastSide');
+  const lastQty = document.getElementById('lastQty');
+  const lastPrice = document.getElementById('lastPrice');
+  const bullVolEl = document.getElementById('bullVol');
+  const bearVolEl = document.getElementById('bearVol');
+  const imbMeter = document.getElementById('imbMeter');
+  const centerLine = document.getElementById('centerLine');
+  const bullBar = document.getElementById('bullBar');
+  const bearBar = document.getElementById('bearBar');
+  const arena = document.getElementById('arena');
+  const symbolInput = document.getElementById('symbol');
+
+  let SYMBOL = symbolInput.value.toUpperCase();
+  let ws, reconnect;
+  let trades = []; // {t, side, qty, price, quote}
+
+  function setStatus(s){ wsState.textContent = s; }
+
+  function connect(){
+    if (ws) try{ ws.close(); } catch(e){}
+    setStatus('connecting...');
+    const stream = SYMBOL.toLowerCase() + '@aggTrade';
+    ws = new WebSocket(`wss://stream.binance.com:9443/ws/${stream}`);
+    ws.onopen = () => setStatus('connected');
+    ws.onclose = () => { setStatus('closed'); reconnect = setTimeout(connect, 1500); };
+    ws.onerror = () => { setStatus('error'); ws.close(); };
+    ws.onmessage = (ev) => {
+      const d = JSON.parse(ev.data);
+      const p = parseFloat(d.p), q = parseFloat(d.q), t = d.T;
+      const side = d.m ? 'SELL' : 'BUY';
+      const quote = p * q;
+      trades.push({t, side, qty:q, price:p, quote});
+      priceEl.textContent = formatPrice(p);
+      lastSide.textContent = side;
+      lastSide.className = side === 'BUY' ? 'good stat' : 'bad stat';
+      lastQty.textContent = q.toFixed(3);
+      lastPrice.textContent = formatPrice(p);
+      prune(); updateStats();
+      spawnSprite(side, {qty:q, price:p, quote});
+    };
+  }
+
+  function prune(){
+    const cutoff = Date.now() - WINDOW_MS;
+    while (trades.length && trades[0].t < cutoff) trades.shift();
+  }
+
+  function updateStats(){
+    let buyQ=0, sellQ=0, buyC=0, sellC=0;
+    for (const tr of trades){
+      if (tr.side==='BUY'){ buyQ += tr.quote; buyC++; } else { sellQ += tr.quote; sellC++; }
+    }
+    bullVolEl.textContent = (buyQ/1000).toFixed(1) + 'k';
+    bearVolEl.textContent = (sellQ/1000).toFixed(1) + 'k';
+    const totalC = buyC + sellC;
+    const imb = totalC>0 ? (buyC - sellC)/totalC : 0;
+    imbMeter.style.transform = `translateX(${imb*50}%)`;
+    const PUSH_PIXELS = 110;
+    const shift = imb * PUSH_PIXELS;
+    centerLine.style.transform = `translateX(calc(-50% + ${shift}px))`;
+
+    const maxQ = Math.max(1, buyQ, sellQ);
+    bullBar.style.height = (12 + (buyQ/maxQ)*64) + '%';
+    bearBar.style.height = (12 + (sellQ/maxQ)*64) + '%';
+  }
+
+  function formatPrice(p){
+    if (p >= 1000) return Number(p).toLocaleString(undefined,{maximumFractionDigits:2});
+    if (p >= 1) return Number(p).toLocaleString(undefined,{maximumFractionDigits:2});
+    return Number(p).toLocaleString(undefined,{minimumFractionDigits:3, maximumFractionDigits:8});
+  }
+
+  const tpl = {
+    military: document.getElementById('svg-bull-military'),
+    roman: document.getElementById('svg-bull-roman'),
+    space: document.getElementById('svg-bull-space'),
+    bear: document.getElementById('svg-bear')
+  };
+
+  function spriteFromTemplate(name){
+    const el = document.createElement('div');
+    el.className = 'sprite';
+    el.innerHTML = tpl[name].innerHTML.trim();
+    return el;
+  }
+
+  function spawnSprite(side, {quote}){
+    const laneY = 24 + Math.random()*46; // % from top
+    if (side==='BUY'){
+      let variant = 'military', w=120;
+      if (quote >= metrics.medium){ variant='space'; w=180; }
+      else if (quote >= metrics.small){ variant='roman'; w=150; }
+      const el = spriteFromTemplate(variant);
+      el.style.width = w+'px';
+      el.style.left = '-160px';
+      el.style.bottom = '22%';
+      el.classList.add('bull-sprite');
+      arena.appendChild(el);
+      const xTo = arena.clientWidth/2 - w/2 - 8;
+      el.animate([{transform:`translate(${-w}px,0)`},{transform:`translate(${xTo}px,0)`}], {duration:SPEED*1000, easing:'cubic-bezier(.2,.8,.2,1)'}).onfinish = ()=>{ el.remove(); impact(xTo+ w/2, laneY, true); };
+    }else{
+      const el = spriteFromTemplate('bear');
+      const w=150;
+      el.style.width = w+'px';
+      el.style.right = '-160px';
+      el.style.bottom = '22%';
+      el.classList.add('bear-sprite');
+      arena.appendChild(el);
+      const xTo = arena.clientWidth/2 - w/2 - 8;
+      el.animate([{transform:`translate(${w}px,0)`},{transform:`translate(${-xTo}px,0)`}], {duration:SPEED*1000, easing:'cubic-bezier(.2,.8,.2,1)'}).onfinish = ()=>{ el.remove(); impact(arena.clientWidth/2, laneY, false); };
+    }
+  }
+
+  function impact(x, yPercent, isBull){
+    const s = document.createElement('div');
+    s.className = 'impact';
+    s.style.left = (x)+'px';
+    s.style.top = yPercent+'%';
+    s.style.background = isBull ? 'rgba(53,208,127,.9)' : 'rgba(255,90,121,.9)';
+    arena.appendChild(s);
+    s.animate([{transform:'scale(1)',opacity:1},{transform:'scale(3)',opacity:0}],{duration:700,easing:'cubic-bezier(.2,.8,.2,1)'}).onfinish=()=>s.remove();
+  }
+
+  symbolInput.addEventListener('change', () => {
+    const clean = symbolInput.value.toUpperCase().replace(/[^A-Z0-9]/g,'');
+    if (!clean) return;
+    SYMBOL = clean;
+    pairLabel.textContent = SYMBOL.replace('USDT',' / USDT');
+    trades.length = 0;
+    connect();
+  });
+
+  pairLabel.textContent = SYMBOL.replace('USDT',' / USDT');
+  connect();
+})();
+</script>
+</body>
+</html>
